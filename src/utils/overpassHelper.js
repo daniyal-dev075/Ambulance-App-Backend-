@@ -24,46 +24,53 @@ function deg2rad(deg) {
 }
 
 /**
- * Queries multiple Overpass mirrors for hospitals near a location.
- * Returns an array of elements sorted by distance, or null if all fail.
+ * Queries all Overpass mirrors IN PARALLEL via Promise.any().
+ * The first mirror to respond successfully wins.
+ * Returns sorted hospital array or null if all fail.
  */
 async function queryNearestHospitals(lat, lng, limit = 10) {
   const overpassQuery = `[out:json];node["amenity"="hospital"](around:15000,${lat},${lng});out ${limit};`;
 
-  for (const mirror of OVERPASS_MIRRORS) {
-    try {
-      console.log(`Trying Overpass mirror: ${mirror}`);
-      const response = await axios.get(mirror, {
-        params: { data: overpassQuery },
-        timeout: 8000,
-        headers: {
-          'User-Agent': 'LifeLineAmbulanceApp/1.0 (contact@ambulanceapp.com)',
-          'Accept': 'application/json',
-        },
-      });
-
-      if (response.data && response.data.elements && response.data.elements.length > 0) {
-        const hospitals = response.data.elements
-          .filter(h => h.lat && h.lon)
-          .map(h => ({
-            hospitalId: h.id.toString(),
-            name: h.tags?.name || 'Unnamed Hospital',
-            latitude: h.lat,
-            longitude: h.lon,
-            distance: getDistanceFromLatLonInKm(lat, lng, h.lat, h.lon),
-          }))
-          .sort((a, b) => a.distance - b.distance);
-
-        console.log(`Success: Found ${hospitals.length} hospitals via ${mirror}`);
-        return hospitals;
+  const requests = OVERPASS_MIRRORS.map(mirror =>
+    axios.get(mirror, {
+      params: { data: overpassQuery },
+      timeout: 10000,
+      headers: {
+        'User-Agent': 'LifeLineAmbulanceApp/1.0 (contact@ambulanceapp.com)',
+        'Accept': 'application/json',
+      },
+    }).then(response => {
+      if (!response.data?.elements?.length) {
+        throw new Error(`No elements from ${mirror}`);
       }
-    } catch (err) {
-      console.warn(`Mirror ${mirror} failed: ${err.message}`);
-    }
+      console.log(`Overpass mirror responded: ${mirror}`);
+      return response.data.elements;
+    })
+  );
+
+  let elements = null;
+  try {
+    // Promise.any: resolves as soon as ONE mirror succeeds
+    elements = await Promise.any(requests);
+  } catch (err) {
+    console.error('All Overpass mirrors failed:', err.message);
+    return null;
   }
 
-  console.error('All Overpass mirrors failed.');
-  return null;
+  const hospitals = elements
+    .filter(h => h.lat && h.lon)
+    .map(h => ({
+      hospitalId: h.id.toString(),
+      name: h.tags?.name || 'Unnamed Hospital',
+      latitude: h.lat,
+      longitude: h.lon,
+      distance: getDistanceFromLatLonInKm(lat, lng, h.lat, h.lon),
+    }))
+    .sort((a, b) => a.distance - b.distance);
+
+  console.log(`Found ${hospitals.length} hospitals. Nearest: ${hospitals[0]?.name} (${hospitals[0]?.distance.toFixed(2)} km)`);
+  return hospitals;
 }
+
 
 module.exports = { getDistanceFromLatLonInKm, deg2rad, queryNearestHospitals };

@@ -1,25 +1,6 @@
 const { db, messaging } = require('../config/firebase');
 const { v4: uuidv4 } = require('uuid');
-const axios = require('axios');
-
-// Helper to calculate distance
-function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
-  var R = 6371; // Radius of the earth in km
-  var dLat = deg2rad(lat2-lat1);
-  var dLon = deg2rad(lon2-lon1); 
-  var a = 
-    Math.sin(dLat/2) * Math.sin(dLat/2) +
-    Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
-    Math.sin(dLon/2) * Math.sin(dLon/2)
-    ; 
-  var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
-  var d = R * c; // Distance in km
-  return d;
-}
-
-function deg2rad(deg) {
-  return deg * (Math.PI/180);
-}
+const { getDistanceFromLatLonInKm, queryNearestHospitals } = require('../utils/overpassHelper');
 
 const createBooking = async (req, res) => {
   try {
@@ -60,46 +41,28 @@ const createBooking = async (req, res) => {
        return res.status(404).json({ error: 'No drivers with valid location found' });
     }
 
-    // Find real hospital via Overpass API
+    // Find real hospital via shared Overpass helper (tries 3 mirror servers)
     let hospitalData = {
       hospitalId: 'mock_h1',
-      name: 'City General Hospital (Mock Fallback)',
-      hospitalLatitude: patientLatitude + 0.01,
-      hospitalLongitude: patientLongitude + 0.01
+      name: 'Nearest Hospital (Fallback)',
+      hospitalLatitude: patientLatitude + 0.005,
+      hospitalLongitude: patientLongitude + 0.005
     };
 
-    try {
-      const overpassQuery = `[out:json];node["amenity"="hospital"](around:10000,${patientLatitude},${patientLongitude});out 10;`;
-      const overpassUrl = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(overpassQuery)}`;
-      const response = await axios.get(overpassUrl, {
-        timeout: 8000,
-        headers: {
-          'User-Agent': 'LifeLineAmbulanceApp/1.0 (test@example.com)'
-        }
-      });
-      
-      if (response.data && response.data.elements && response.data.elements.length > 0) {
-        // Sort hospitals by distance and pick the nearest one
-        const sorted = response.data.elements
-          .filter(h => h.lat && h.lon)
-          .map(h => ({
-            ...h,
-            dist: getDistanceFromLatLonInKm(patientLatitude, patientLongitude, h.lat, h.lon)
-          }))
-          .sort((a, b) => a.dist - b.dist);
-
-        const hNode = sorted[0];
-        hospitalData = {
-          hospitalId: hNode.id.toString(),
-          name: hNode.tags?.name || 'Nearest Hospital',
-          hospitalLatitude: hNode.lat,
-          hospitalLongitude: hNode.lon
-        };
-        console.log(`Assigned hospital: ${hospitalData.name} (${hospitalData.dist?.toFixed(2)} km)`);
-      }
-    } catch (e) {
-      console.error('Overpass API failed, using mock hospital:', e.message);
+    const hospitals = await queryNearestHospitals(patientLatitude, patientLongitude, 10);
+    if (hospitals && hospitals.length > 0) {
+      const h = hospitals[0];
+      hospitalData = {
+        hospitalId: h.hospitalId,
+        name: h.name,
+        hospitalLatitude: h.latitude,
+        hospitalLongitude: h.longitude,
+      };
+      console.log(`Assigned hospital: ${h.name} (${h.distance.toFixed(2)} km away)`);
+    } else {
+      console.warn('All Overpass mirrors failed. Using fallback hospital coordinates near patient.');
     }
+
 
     const bookingId = uuidv4();
     const bookingData = {

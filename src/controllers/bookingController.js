@@ -69,23 +69,33 @@ const createBooking = async (req, res) => {
     };
 
     try {
-      const overpassQuery = `[out:json];node["amenity"="hospital"](around:10000,${patientLatitude},${patientLongitude});out 1;`;
+      const overpassQuery = `[out:json];node["amenity"="hospital"](around:10000,${patientLatitude},${patientLongitude});out 10;`;
       const overpassUrl = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(overpassQuery)}`;
       const response = await axios.get(overpassUrl, {
-        timeout: 2000,
+        timeout: 8000,
         headers: {
           'User-Agent': 'LifeLineAmbulanceApp/1.0 (test@example.com)'
         }
       });
       
       if (response.data && response.data.elements && response.data.elements.length > 0) {
-        const hNode = response.data.elements[0];
+        // Sort hospitals by distance and pick the nearest one
+        const sorted = response.data.elements
+          .filter(h => h.lat && h.lon)
+          .map(h => ({
+            ...h,
+            dist: getDistanceFromLatLonInKm(patientLatitude, patientLongitude, h.lat, h.lon)
+          }))
+          .sort((a, b) => a.dist - b.dist);
+
+        const hNode = sorted[0];
         hospitalData = {
           hospitalId: hNode.id.toString(),
           name: hNode.tags?.name || 'Nearest Hospital',
           hospitalLatitude: hNode.lat,
           hospitalLongitude: hNode.lon
         };
+        console.log(`Assigned hospital: ${hospitalData.name} (${hospitalData.dist?.toFixed(2)} km)`);
       }
     } catch (e) {
       console.error('Overpass API failed, using mock hospital:', e.message);

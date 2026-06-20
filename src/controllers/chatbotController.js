@@ -9,14 +9,15 @@ const generateResponse = async (req, res) => {
 
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) {
-    return res.status(500).json({ error: 'Groq API Key is not configured on the server.' });
+    const similarKeys = Object.keys(process.env).filter(k => k.includes('ROQ') || k.includes('GROQ')).join(', ');
+    return res.status(500).json({ error: `Groq API Key missing. Did you misspell it? Found these similar keys on server: [${similarKeys}]` });
   }
 
   try {
     const response = await axios.post(
       'https://api.groq.com/openai/v1/chat/completions',
       {
-        model: 'llama3-8b-8192',
+        model: 'llama-3.1-8b-instant',
         messages: [
           {
             role: 'system',

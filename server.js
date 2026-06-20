@@ -13,6 +13,7 @@ const driverRoutes = require('./src/routes/driverRoutes');
 const hospitalRoutes = require('./src/routes/hospitalRoutes');
 const etaRoutes = require('./src/routes/etaRoutes');
 const notificationRoutes = require('./src/routes/notificationRoutes');
+const chatbotRoutes = require('./src/routes/chatbotRoutes');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/bookings', bookingRoutes);
@@ -20,6 +21,7 @@ app.use('/api/drivers', driverRoutes);
 app.use('/api/hospitals', hospitalRoutes);
 app.use('/api/eta', etaRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/chatbot', chatbotRoutes);
 
 app.get('/', (req, res) => {
   res.send('Ambulance Booking System Backend is running.');

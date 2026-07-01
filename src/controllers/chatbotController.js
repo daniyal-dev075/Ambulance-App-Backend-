@@ -7,7 +7,7 @@ const generateResponse = async (req, res) => {
     return res.status(400).json({ error: 'Message is required' });
   }
 
-  const webhookUrl = process.env.N8N_WEBHOOK_URL || 'http://localhost:5678/webhook/43b77abd-4c28-4a3b-a125-3f580be13e9a';
+  const webhookUrl = process.env.N8N_WEBHOOK_URL || 'https://n8n.doclink.dev/webhook/43b77abd-4c28-4a3b-a125-3f580be13e9a';
 
   try {
     const response = await axios.post(
@@ -16,7 +16,6 @@ const generateResponse = async (req, res) => {
       {
         headers: {
           'Content-Type': 'application/json',
-          'Bypass-Tunnel-Reminder': 'true',
         }
       }
     );

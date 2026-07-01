@@ -12,7 +12,10 @@ const generateResponse = async (req, res) => {
   try {
     const response = await axios.post(
       webhookUrl,
-      { message: message },
+      { 
+        message: message,
+        conversation_id: req.user.uid 
+      },
       {
         headers: {
           'Content-Type': 'application/json',

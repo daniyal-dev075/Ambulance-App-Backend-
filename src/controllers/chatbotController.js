@@ -16,6 +16,7 @@ const generateResponse = async (req, res) => {
       {
         headers: {
           'Content-Type': 'application/json',
+          'Bypass-Tunnel-Reminder': 'true',
         }
       }
     );
